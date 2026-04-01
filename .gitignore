@@ -1,0 +1,52 @@
+# Python bytecode/cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Local environment files
+.env
+.env.*
+
+# Tool/test caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# IDE/editor settings
+.vscode/
+.idea/
+*.swp
+
+# OS clutter
+.DS_Store
+Thumbs.db
+
+# Logs/temp files
+*.log
+*.tmp
+
+# Generated datasets
+dataset/asl_alphabet_images/
+dataset/landmarks.csv
+!dataset/.gitkeep
+
+# Generated model artifacts
+models/*.h5
+models/*.keras
+models/*.ckpt
+models/*.ckpt.*
+models/*.pb
+models/*.tflite
+models/training_history.csv
+models/training_metrics.json
+!models/.gitkeep
+
+# Exclude research paper content from version control
+paper/

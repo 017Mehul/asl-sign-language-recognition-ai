@@ -1,0 +1,782 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Kinetic ASL Interface</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;700;800&family=Space+Grotesk:wght@500;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg: #030c1d;
+        --bg-soft: #0a1529;
+        --panel: #121d31;
+        --panel-soft: #202b3c;
+        --text: #d5dded;
+        --muted: #94a0b9;
+        --line: #23334e;
+        --mint: #53f8d0;
+        --danger: #e9b8c1;
+        --btn: #aab6ef;
+        --btn-text: #1d317d;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: "Manrope", sans-serif;
+        color: var(--text);
+        background:
+          radial-gradient(1200px 800px at 70% -20%, #102643 0%, transparent 60%),
+          radial-gradient(900px 600px at 10% 110%, #091733 0%, transparent 65%),
+          linear-gradient(90deg, #030b1a 0%, #051127 100%);
+      }
+
+      .app {
+        min-height: 100vh;
+        display: grid;
+        grid-template-columns: 260px 1fr;
+      }
+
+      .sidebar {
+        border-right: 1px solid #16243f;
+        padding: 20px 16px;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 8px;
+      }
+
+      .brand-logo {
+        width: 50px;
+        height: 50px;
+        border-radius: 14px;
+        display: grid;
+        place-items: center;
+        font-family: "Space Grotesk", sans-serif;
+        font-weight: 700;
+        background: linear-gradient(140deg, #8ea3ff, #5f87ff);
+        color: #152f90;
+      }
+
+      .brand-title {
+        font-size: 1.9rem;
+        line-height: 1;
+        margin: 0;
+      }
+
+      .brand-sub {
+        margin: 4px 0 0;
+        color: #c0ccdf;
+      }
+
+      .nav {
+        margin-top: 26px;
+        display: grid;
+        gap: 8px;
+      }
+
+      .nav-item {
+        padding: 14px 14px;
+        border-radius: 12px;
+        border: 1px solid transparent;
+        color: var(--muted);
+        text-decoration: none;
+      }
+
+      .nav-item.active {
+        color: var(--mint);
+        border-color: var(--line);
+        background: linear-gradient(90deg, #121f34, #0d172a);
+        box-shadow: inset -3px 0 0 var(--mint);
+      }
+
+      .grow {
+        flex: 1;
+      }
+
+      .start-btn {
+        width: 100%;
+        border: 0;
+        border-radius: 14px;
+        padding: 14px;
+        font-size: 1.1rem;
+        font-weight: 800;
+        color: #1f3388;
+        background: linear-gradient(180deg, #9cb2ff, #4f74ff);
+        cursor: pointer;
+      }
+
+      .links {
+        border-top: 1px solid #16233d;
+        margin-top: 16px;
+        padding-top: 12px;
+      }
+
+      .links a {
+        display: block;
+        color: #9ba8c2;
+        text-decoration: none;
+        padding: 8px 6px;
+      }
+
+      .content {
+        padding: 16px 18px 18px;
+      }
+
+      .topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        border: 1px solid #1c2942;
+        border-radius: 14px;
+        background: linear-gradient(90deg, #121f33, #101a2d);
+        padding: 14px 16px;
+      }
+
+      .backend {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        font-family: "Space Grotesk", sans-serif;
+        color: var(--danger);
+        font-size: 0.86rem;
+      }
+
+      .dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        background: #cd8c99;
+      }
+
+      .dot.online {
+        background: #5bf0cb;
+      }
+
+      .meta {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+      }
+
+      .session {
+        text-align: right;
+      }
+
+      .session small {
+        display: block;
+        color: #aab5ca;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .session strong {
+        font-family: "Space Grotesk", sans-serif;
+      }
+
+      .chip {
+        width: 38px;
+        height: 38px;
+        border-radius: 10px;
+        border: 1px solid #2a3854;
+        display: grid;
+        place-items: center;
+        color: #c8d3ea;
+        background: #16233a;
+      }
+
+      .layout {
+        margin-top: 16px;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 310px;
+        gap: 16px;
+      }
+
+      .left {
+        display: grid;
+        gap: 16px;
+      }
+
+      .status-card {
+        border: 1px solid #263550;
+        border-radius: 16px;
+        background: #222e41;
+        padding: 20px;
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      .status-card p {
+        margin: 0;
+        font-size: 1.18rem;
+      }
+
+      .status-tag {
+        color: #25a98f;
+        font-family: "Space Grotesk", sans-serif;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        font-size: 0.82rem;
+      }
+
+      .camera-card {
+        border: 1px solid #263550;
+        border-radius: 16px;
+        min-height: 420px;
+        background: #343d4d;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .feed {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: none;
+      }
+
+      .feed.active {
+        display: block;
+      }
+
+      .overlay {
+        position: absolute;
+        inset: 0;
+        display: grid;
+        align-content: center;
+        justify-items: center;
+        gap: 14px;
+        text-align: center;
+        background: linear-gradient(180deg, rgba(38, 48, 63, 0.72), rgba(39, 46, 59, 0.85));
+        padding: 18px;
+      }
+
+      .overlay.hidden {
+        display: none;
+      }
+
+      .cam-icon {
+        width: 82px;
+        height: 82px;
+        border-radius: 50%;
+        display: grid;
+        place-items: center;
+        background: #1a2436;
+        font-size: 2rem;
+      }
+
+      .enable-btn {
+        border: 0;
+        border-radius: 999px;
+        padding: 13px 32px;
+        font-size: 1.05rem;
+        font-weight: 800;
+        color: var(--btn-text);
+        background: var(--btn);
+        cursor: pointer;
+      }
+
+      .enable-btn:disabled {
+        opacity: 0.65;
+        cursor: not-allowed;
+      }
+
+      .panel {
+        border: 1px solid #1a2842;
+        border-radius: 14px;
+        background: linear-gradient(180deg, #111c30, #0a1324);
+        padding: 16px;
+      }
+
+      .panel-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 10px;
+      }
+
+      .panel-head strong {
+        font-family: "Space Grotesk", sans-serif;
+        font-size: 0.84rem;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: #bdc7dc;
+      }
+
+      .mini {
+        display: inline-grid;
+        place-items: center;
+        width: 34px;
+        height: 34px;
+        border-radius: 9px;
+        border: 1px solid #2c3a56;
+        background: #1a2740;
+        color: #d4dcf0;
+        cursor: pointer;
+      }
+
+      .sentence {
+        min-height: 170px;
+        font-size: 2rem;
+        line-height: 1.4;
+        margin: 10px 0 14px;
+        word-break: break-word;
+      }
+
+      .btn-main {
+        width: 100%;
+        border: 0;
+        border-radius: 14px;
+        padding: 14px;
+        margin-bottom: 10px;
+        font-size: 1.15rem;
+        font-weight: 800;
+        color: #20348a;
+        background: var(--btn);
+        cursor: pointer;
+      }
+
+      .btn-main:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+
+      .btn-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+      }
+
+      .btn-alt {
+        border: 1px solid #2b3953;
+        border-radius: 12px;
+        padding: 12px 8px;
+        color: #d3dced;
+        background: #1f2b3f;
+        font-weight: 700;
+        cursor: pointer;
+      }
+
+      .short {
+        display: flex;
+        justify-content: space-between;
+        margin-top: 12px;
+        color: #ced7e9;
+      }
+
+      .key {
+        border: 1px solid #33435f;
+        border-radius: 7px;
+        background: #303c52;
+        padding: 4px 9px;
+        font-family: "Space Grotesk", sans-serif;
+        font-size: 0.8rem;
+      }
+
+      .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+      }
+
+      @media (max-width: 1080px) {
+        .app {
+          grid-template-columns: 1fr;
+        }
+
+        .sidebar {
+          border-right: 0;
+          border-bottom: 1px solid #16243f;
+        }
+
+        .nav {
+          grid-template-columns: repeat(4, minmax(120px, 1fr));
+        }
+
+        .grow,
+        .links {
+          display: none;
+        }
+      }
+
+      @media (max-width: 980px) {
+        .layout {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      @media (max-width: 640px) {
+        .topbar {
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 10px;
+        }
+
+        .meta {
+          width: 100%;
+          justify-content: space-between;
+        }
+
+        .btn-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="brand-logo">K</div>
+          <div>
+            <h1 class="brand-title">Kinetic</h1>
+            <p class="brand-sub">ASL Interface</p>
+          </div>
+        </div>
+
+        <nav class="nav">
+          <a class="nav-item active" href="#">Recognition</a>
+          <a class="nav-item" href="#">History</a>
+          <a class="nav-item" href="#">Glossary</a>
+          <a class="nav-item" href="#">Profile</a>
+        </nav>
+
+        <div class="grow"></div>
+        <button id="startSessionBtn" class="start-btn" type="button">Start Session</button>
+
+        <div class="links">
+          <a href="#">Settings</a>
+          <a href="#">Support</a>
+        </div>
+      </aside>
+
+      <main class="content">
+        <header class="topbar">
+          <div class="backend" id="backendRow">
+            <span id="backendDot" class="dot"></span>
+            <span id="backendText">Backend Offline</span>
+          </div>
+          <div class="meta">
+            <div class="session">
+              <small>Session ID</small>
+              <strong id="sessionLabel">--</strong>
+            </div>
+            <span class="chip">S</span>
+            <span class="chip">G</span>
+            <span class="chip">@</span>
+          </div>
+        </header>
+
+        <section class="layout">
+          <section class="left">
+            <article class="status-card">
+              <p id="translationText">Position your hand in frame to begin</p>
+              <span class="status-tag">Real-Time Translation</span>
+            </article>
+
+            <article class="camera-card">
+              <video id="cameraFeed" class="feed" autoplay muted playsinline></video>
+              <canvas id="captureCanvas" width="640" height="480" class="sr-only"></canvas>
+              <div id="cameraOverlay" class="overlay">
+                <div class="cam-icon">X</div>
+                <div id="cameraState">Camera is currently inactive</div>
+                <button id="enableCameraBtn" class="enable-btn" type="button">Enable Camera</button>
+              </div>
+            </article>
+          </section>
+
+          <section>
+            <article class="panel">
+              <div class="panel-head">
+                <strong>Current Sentence</strong>
+                <div>
+                  <button id="speakBtn" class="mini" type="button" aria-label="Speak sentence">T</button>
+                  <button id="clearBtn" class="mini" type="button" aria-label="Clear sentence">C</button>
+                </div>
+              </div>
+
+              <div id="sentenceText" class="sentence" aria-live="polite">Connect backend to start.</div>
+
+              <button id="addBtn" class="btn-main" type="button" disabled>Add Letter (A)</button>
+              <div class="btn-grid">
+                <button id="spaceBtn" class="btn-alt" type="button">Space</button>
+                <button id="backspaceBtn" class="btn-alt" type="button">Delete</button>
+              </div>
+            </article>
+
+            <article class="panel" style="margin-top: 16px">
+              <div class="panel-head"><strong>Keyboard Shortcuts</strong></div>
+              <div class="short"><span>Add Prediction</span><span class="key">A</span></div>
+              <div class="short"><span>Add Space</span><span class="key">SPACE</span></div>
+              <div class="short"><span>Backspace</span><span class="key">B</span></div>
+              <div class="short"><span>Text-to-Speech</span><span class="key">T</span></div>
+            </article>
+          </section>
+        </section>
+      </main>
+    </div>
+
+    <script>
+      const API_BASE =
+        location.protocol === "http:" || location.protocol === "https:"
+          ? `${location.protocol}//${location.host}`
+          : "http://127.0.0.1:8000";
+
+      const rawSessionId =
+        localStorage.getItem("aslSessionId") ||
+        (window.crypto?.randomUUID ? window.crypto.randomUUID() : `session-${Date.now()}`);
+      localStorage.setItem("aslSessionId", rawSessionId);
+      const sessionId = `KS-${rawSessionId.replace(/[^a-zA-Z0-9]/g, "").slice(0, 6).toUpperCase() || "000000"}`;
+
+      const backendDot = document.getElementById("backendDot");
+      const backendText = document.getElementById("backendText");
+      const backendRow = document.getElementById("backendRow");
+      const sessionLabel = document.getElementById("sessionLabel");
+      const translationText = document.getElementById("translationText");
+      const sentenceText = document.getElementById("sentenceText");
+      const cameraState = document.getElementById("cameraState");
+      const cameraFeed = document.getElementById("cameraFeed");
+      const cameraOverlay = document.getElementById("cameraOverlay");
+      const captureCanvas = document.getElementById("captureCanvas");
+      const enableCameraBtn = document.getElementById("enableCameraBtn");
+      const startSessionBtn = document.getElementById("startSessionBtn");
+      const addBtn = document.getElementById("addBtn");
+      const spaceBtn = document.getElementById("spaceBtn");
+      const backspaceBtn = document.getElementById("backspaceBtn");
+      const clearBtn = document.getElementById("clearBtn");
+      const speakBtn = document.getElementById("speakBtn");
+
+      sessionLabel.textContent = sessionId;
+
+      let mediaStream = null;
+      let predictionLoop = null;
+      let requestInFlight = false;
+      let currentPrediction = null;
+
+      function setBackendOnline(isOnline) {
+        backendDot.classList.toggle("online", isOnline);
+        backendText.textContent = isOnline ? "Backend Online" : "Backend Offline";
+        backendRow.style.color = isOnline ? "#85f1d7" : "#e9b8c1";
+      }
+
+      function updateSentence(text) {
+        sentenceText.textContent = text && text.trim() ? text : "No sentence yet.";
+      }
+
+      function setTranslation(text) {
+        translationText.textContent = text;
+      }
+
+      function refreshAddButton() {
+        addBtn.disabled = !currentPrediction;
+        addBtn.textContent = currentPrediction ? `Add Letter (${currentPrediction})` : "Add Letter (A)";
+      }
+
+      async function checkHealth() {
+        try {
+          const response = await fetch(`${API_BASE}/health`);
+          if (!response.ok) throw new Error("health failed");
+          const payload = await response.json();
+          setBackendOnline(payload.status === "ok");
+        } catch (error) {
+          setBackendOnline(false);
+        }
+      }
+
+      async function syncSentence() {
+        try {
+          const response = await fetch(`${API_BASE}/sentence/${sessionId}`);
+          if (!response.ok) throw new Error("sync failed");
+          const payload = await response.json();
+          updateSentence(payload.sentence || "");
+        } catch (error) {
+          updateSentence("Unable to sync sentence.");
+        }
+      }
+
+      async function runAction(action, letter = null) {
+        const body = { session_id: sessionId, action };
+        if (letter) body.letter = letter;
+
+        const response = await fetch(`${API_BASE}/sentence/action`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.detail || "action failed");
+        updateSentence(payload.sentence || "");
+        return payload;
+      }
+
+      async function startCamera() {
+        if (mediaStream) return;
+
+        enableCameraBtn.disabled = true;
+        cameraState.textContent = "Requesting camera permission...";
+
+        try {
+          mediaStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+          cameraFeed.srcObject = mediaStream;
+          await cameraFeed.play();
+
+          cameraFeed.classList.add("active");
+          cameraOverlay.classList.add("hidden");
+          setTranslation("Camera active. Hold a sign for prediction.");
+
+          if (predictionLoop) clearInterval(predictionLoop);
+          predictionLoop = window.setInterval(predictFrame, 280);
+        } catch (error) {
+          cameraState.textContent = `Camera error: ${error.message}`;
+          setTranslation("Camera unavailable. Check camera permissions.");
+        } finally {
+          enableCameraBtn.disabled = false;
+        }
+      }
+
+      async function predictFrame() {
+        if (!mediaStream || requestInFlight) return;
+        requestInFlight = true;
+
+        try {
+          const ctx = captureCanvas.getContext("2d");
+          ctx.drawImage(cameraFeed, 0, 0, captureCanvas.width, captureCanvas.height);
+          const image = captureCanvas.toDataURL("image/jpeg", 0.8);
+
+          const response = await fetch(`${API_BASE}/predict`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ image }),
+          });
+          const payload = await response.json();
+          if (!response.ok) throw new Error(payload.detail || "prediction failed");
+
+          currentPrediction = payload.predicted_letter || null;
+          if (payload.hand_detected) {
+            const shown = currentPrediction || payload.top_letter || "--";
+            setTranslation(`Detected ${shown} at ${(Number(payload.confidence || 0) * 100).toFixed(1)}% confidence`);
+          } else {
+            currentPrediction = null;
+            setTranslation("No hand detected. Keep your hand in frame.");
+          }
+          refreshAddButton();
+        } catch (error) {
+          currentPrediction = null;
+          refreshAddButton();
+          setTranslation(`Prediction error: ${error.message}`);
+        } finally {
+          requestInFlight = false;
+        }
+      }
+
+      async function addLetter() {
+        if (!currentPrediction) {
+          setTranslation("No stable prediction to append.");
+          return;
+        }
+        try {
+          await runAction("append", currentPrediction);
+          setTranslation(`Added letter ${currentPrediction}.`);
+        } catch (error) {
+          setTranslation(error.message);
+        }
+      }
+
+      async function addSpace() {
+        try {
+          await runAction("space");
+          setTranslation("Added space.");
+        } catch (error) {
+          setTranslation(error.message);
+        }
+      }
+
+      async function backspace() {
+        try {
+          await runAction("backspace");
+          setTranslation("Deleted last character.");
+        } catch (error) {
+          setTranslation(error.message);
+        }
+      }
+
+      async function clearSentence() {
+        try {
+          await runAction("clear");
+          setTranslation("Sentence cleared.");
+        } catch (error) {
+          setTranslation(error.message);
+        }
+      }
+
+      async function speakSentence() {
+        try {
+          const payload = await runAction("speak");
+          setTranslation(payload.spoken ? "Speaking sentence..." : "TTS unavailable or sentence empty.");
+        } catch (error) {
+          setTranslation(error.message);
+        }
+      }
+
+      function shouldIgnoreShortcut(event) {
+        const tag = event.target && event.target.tagName ? event.target.tagName.toLowerCase() : "";
+        return tag === "input" || tag === "textarea" || event.ctrlKey || event.metaKey || event.altKey;
+      }
+
+      enableCameraBtn.addEventListener("click", startCamera);
+      startSessionBtn.addEventListener("click", startCamera);
+      addBtn.addEventListener("click", addLetter);
+      spaceBtn.addEventListener("click", addSpace);
+      backspaceBtn.addEventListener("click", backspace);
+      clearBtn.addEventListener("click", clearSentence);
+      speakBtn.addEventListener("click", speakSentence);
+
+      document.addEventListener("keydown", (event) => {
+        if (shouldIgnoreShortcut(event)) return;
+
+        const key = event.key.toLowerCase();
+        if (key === "a") {
+          event.preventDefault();
+          addLetter();
+        } else if (event.key === " ") {
+          event.preventDefault();
+          addSpace();
+        } else if (key === "b") {
+          event.preventDefault();
+          backspace();
+        } else if (key === "t") {
+          event.preventDefault();
+          speakSentence();
+        }
+      });
+
+      refreshAddButton();
+      checkHealth();
+      syncSentence();
+      setInterval(checkHealth, 8000);
+    </script>
+  </body>
+</html>

@@ -1,0 +1,12 @@
+numpy==1.26.4
+opencv-python==4.10.0.84
+mediapipe==0.10.5
+protobuf==3.20.3
+tensorflow==2.10.0
+tensorflow-directml-plugin==0.4.0.dev230202; platform_system == "Windows"
+scikit-learn==1.7.2
+pandas==2.3.3
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+pyttsx3>=2.90
+kagglehub>=1.0.0
