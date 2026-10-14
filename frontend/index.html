@@ -345,12 +345,14 @@
 const modelObserver=new MutationObserver(()=>{const t=document.getElementById('backendText')?.textContent||'';const badge=document.getElementById('modelBadge');if(badge){badge.textContent=t;badge.style.background=t.includes('Ready')?'#e4fbf2':'#f1eaff';badge.style.color=t.includes('Ready')?'#087f5b':'#6842ba';}});
 const statusNode=document.getElementById('backendText');if(statusNode)modelObserver.observe(statusNode,{childList:true,characterData:true,subtree:true});
 const translateNode=document.getElementById('translationText');
+const predictionObserver=new MutationObserver(()=>{const t=translateNode?.textContent||'';const match=t.match(/Top prediction:\s*([A-Z])\s*\((\d+(?:\.\d+)?)%\)/i);if(match){const letter=match[1].toUpperCase(),pct=Number(match[2]);document.getElementById('predictionLetter').textContent=letter;document.getElementById('confidenceValue').textContent=pct.toFixed(1)+'%';document.getElementById('confidenceBar').style.width=Math.max(0,Math.min(100,pct))+'%';document.getElementById('top1Label').textContent='Letter '+letter;document.getElementById('top1Pct').textContent=pct.toFixed(1)+'%';document.getElementById('top1Bar').style.width=Math.max(0,Math.min(100,pct))+'%';}else if(t.includes('No hand detected')){document.getElementById('predictionLetter').textContent='—';document.getElementById('confidenceValue').textContent='—';document.getElementById('confidenceBar').style.width='0%';}});if(translateNode)predictionObserver.observe(translateNode,{childList:true,characterData:true,subtree:true});
+
 const translateObserver=new MutationObserver(()=>{const t=translateNode?.textContent||'';const badge=document.getElementById('cameraBadge');if(badge&&t.toLowerCase().includes('camera active')){badge.textContent='Camera Active';}else if(badge&&t.toLowerCase().includes('camera error')){badge.textContent='Camera Error';}});
 if(translateNode)translateObserver.observe(translateNode,{childList:true,characterData:true,subtree:true});
 const feed=document.getElementById('cameraFeed');
 const badgeObserver=new MutationObserver(()=>{const active=feed.classList.contains('active');const b=document.getElementById('cameraBadge');if(b&&active)b.textContent='Camera Active';else if(b&&!active)b.textContent='Camera Inactive';});
 badgeObserver.observe(feed,{attributes:true,attributeFilter:['class']});
-document.getElementById('pauseBtn')?.addEventListener('click',()=>{if(feed.srcObject){feed.pause();document.getElementById('pauseBtn').textContent='▶ Resume';}else{document.getElementById('enableCameraBtn').click();}});
+document.getElementById('pauseBtn')?.addEventListener('click',()=>{const btn=document.getElementById('pauseBtn');if(!feed.srcObject){document.getElementById('enableCameraBtn').click();return;}if(feed.paused){feed.play();btn.textContent='Ⅱ Pause';}else{feed.pause();btn.textContent='▶ Resume';}});
 document.getElementById('webcamBtn')?.addEventListener('click',()=>document.getElementById('enableCameraBtn').click());
 document.getElementById('uploadBtn')?.addEventListener('click',()=>alert('Image upload is not implemented yet. Use the webcam for live recognition.'));
 </script>
