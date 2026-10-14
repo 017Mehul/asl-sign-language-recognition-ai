@@ -60,6 +60,12 @@ def load_csv_dataset(csv_path: Path, include_labels: set[str]) -> Tuple[np.ndarr
 
     labels = dataframe["label"].values
     features = dataframe.drop(columns=["label"]).values.astype(np.float32)
+    if features.ndim != 2 or features.shape[1] != 63:
+        raise ValueError(
+            f"CSV dataset must contain exactly 63 numeric landmark feature columns; got {features.shape}."
+        )
+    if not np.isfinite(features).all():
+        raise ValueError("CSV dataset contains NaN or infinite feature values.")
     return features, labels
 
 
@@ -184,11 +190,29 @@ def run_training(args: argparse.Namespace) -> None:
 
     x = np.vstack(x_parts).astype(np.float32)
     y = np.concatenate(y_parts).astype(str)
+    if x.ndim != 2 or x.shape[1] != 63:
+        raise ValueError(f"Training features must have shape (samples, 63); got {x.shape}.")
+    if not np.isfinite(x).all():
+        raise ValueError("Training features contain NaN or infinite values.")
 
     encoder = LabelEncoder()
     y_encoded = encoder.fit_transform(y)
     classes = encoder.classes_.tolist()
     LOGGER.info("Final training dataset: %d samples across %d classes.", len(y), len(classes))
+    if args.labels.replace(",", "").strip().upper() == "".join(DEFAULT_LABELS):
+        missing = sorted(set(DEFAULT_LABELS) - set(classes))
+        if missing:
+            raise ValueError(
+                "Default A-Z training requested, but dataset is missing classes: "
+                + ", ".join(missing)
+            )
+    class_counts = {label: int(np.sum(y == label)) for label in classes}
+    insufficient = [label for label, count in class_counts.items() if count < 2]
+    if insufficient:
+        raise ValueError(
+            "At least two samples are required per class for a stratified split. "
+            "Insufficient classes: " + ", ".join(insufficient)
+        )
 
     x_train, x_test, y_train, y_test = train_test_split(
         x,
@@ -231,7 +255,14 @@ def run_training(args: argparse.Namespace) -> None:
     probabilities = model.predict(x_test, verbose=0)
     predictions = np.argmax(probabilities, axis=1)
     accuracy = float(accuracy_score(y_test, predictions))
-    report_dict = classification_report(y_test, predictions, target_names=classes, output_dict=True)
+    report_dict = classification_report(
+        y_test,
+        predictions,
+        labels=np.arange(len(classes)),
+        target_names=classes,
+        output_dict=True,
+        zero_division=0,
+    )
 
     model_output.parent.mkdir(parents=True, exist_ok=True)
     labels_output.parent.mkdir(parents=True, exist_ok=True)

@@ -32,7 +32,7 @@ Thumbs.db
 *.log
 *.tmp
 
-# Generated datasets
+# Generated datasets (do not commit large/private datasets)
 dataset/asl_alphabet_images/
 dataset/landmarks.csv
 !dataset/.gitkeep
@@ -47,6 +47,7 @@ models/*.tflite
 models/training_history.csv
 models/training_metrics.json
 !models/.gitkeep
+!models/labels.json
 
 # Exclude research paper content from version control
 paper/

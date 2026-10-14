@@ -1,12 +1,14 @@
-numpy==1.26.4
-opencv-python==4.10.0.84
-mediapipe==0.10.5
-protobuf==3.20.3
+# Tested target: CPython 3.10 (CPU-compatible baseline).
+# TensorFlow 2.10 requires protobuf <3.20; MediaPipe 0.10.9 supports protobuf >=3.11,<4.
+numpy==1.23.5
+opencv-python==4.8.1.78
+mediapipe==0.10.9
+protobuf==3.19.6
 tensorflow==2.10.0
-tensorflow-directml-plugin==0.4.0.dev230202; platform_system == "Windows"
-scikit-learn==1.7.2
-pandas==2.3.3
+scikit-learn==1.3.2
+pandas==2.0.3
 fastapi==0.104.1
+pydantic==1.10.15
 uvicorn[standard]==0.24.0
-pyttsx3>=2.90
-kagglehub>=1.0.0
+pyttsx3==2.90
+kagglehub>=0.3.0,<1.0
