@@ -27,7 +27,7 @@ jobs:
       - name: Install TensorFlow.js converter
         run: |
           python -m pip install --upgrade pip
-          python -m pip install tensorflow-cpu==2.13.1 tensorflowjs==4.17.0
+          python -m pip install tensorflowjs==4.17.0
       - name: Verify source model and labels
         run: |
           test -s models/asl_model.h5
