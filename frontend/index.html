@@ -711,11 +711,13 @@
           const features = normalizeLandmarks(landmarks);
           if (!features || features.length !== 63) throw new Error("Hand landmark extraction failed.");
           const input = tf.tensor2d([features], [1, 63], "float32");
+          const output = model.predict(input);
           let probabilities;
           try {
-            probabilities = await model.predict(input).data();
+            probabilities = await output.data();
           } finally {
             input.dispose();
+            output.dispose();
           }
           let topIndex = 0;
           for (let i = 1; i < probabilities.length; i++) {
