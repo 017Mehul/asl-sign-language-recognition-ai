@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: asl-sign-language-recognition-ai
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn backend.app:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.10.13
+      - key: ASL_MIN_CONFIDENCE
+        value: "0.60"
+      - key: ASL_ALLOWED_ORIGINS
+        value: "http://127.0.0.1:8000,http://localhost:8000"
