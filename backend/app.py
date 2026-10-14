@@ -47,7 +47,7 @@ class PredictResponse(BaseModel):
 class SentenceActionRequest(BaseModel):
     session_id: str = Field(default="default", min_length=1, max_length=128)
     action: Literal["append", "space", "backspace", "clear", "speak"]
-    letter: Optional[str] = Field(default=None, min_length=1, max_length=1, pattern="^[A-Za-z]$")
+    letter: Optional[str] = Field(default=None, min_length=1, max_length=1, regex="^[A-Za-z]$")
 
 
 class SentenceResponse(BaseModel):
