@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import binascii
 import json
 import logging
 import os
@@ -27,10 +28,13 @@ if str(ROOT_DIR) not in sys.path:
 from utils.feature_extraction import HandLandmarkExtractor  # noqa: E402
 
 LOGGER = logging.getLogger("asl_backend")
+MAX_IMAGE_DATA_URL_CHARS = 5_000_000
+DEFAULT_ALLOWED_ORIGINS = "http://127.0.0.1:8000,http://localhost:8000"
 
 
 class PredictRequest(BaseModel):
-    image: str = Field(..., description="Base64 image or data URL.")
+    image: str = Field(..., min_length=1, max_length=MAX_IMAGE_DATA_URL_CHARS,
+                       description="Base64 image or data URL; payload size is limited.")
 
 
 class PredictResponse(BaseModel):
@@ -41,9 +45,9 @@ class PredictResponse(BaseModel):
 
 
 class SentenceActionRequest(BaseModel):
-    session_id: str = "default"
+    session_id: str = Field(default="default", min_length=1, max_length=128)
     action: Literal["append", "space", "backspace", "clear", "speak"]
-    letter: Optional[str] = None
+    letter: Optional[str] = Field(default=None, min_length=1, max_length=1, pattern="^[A-Za-z]$")
 
 
 class SentenceResponse(BaseModel):
@@ -53,6 +57,8 @@ class SentenceResponse(BaseModel):
 
 
 class SentenceStore:
+    """Thread-safe in-process sentence storage; not persistent across restarts."""
+
     def __init__(self) -> None:
         self._state: Dict[str, str] = {}
         self._lock = threading.Lock()
@@ -65,9 +71,9 @@ class SentenceStore:
         with self._lock:
             sentence = self._state.get(session_id, "")
             if action == "append":
-                if not letter:
-                    raise ValueError("Action 'append' requires a letter.")
-                sentence += letter.upper()[0]
+                if not letter or len(letter) != 1 or not letter.isalpha() or not letter.isascii():
+                    raise ValueError("Action 'append' requires one ASCII alphabet letter.")
+                sentence += letter.upper()
             elif action == "space":
                 sentence += " "
             elif action == "backspace":
@@ -106,6 +112,8 @@ class TTSService:
 
 class ModelService:
     def __init__(self, model_path: Path, labels_path: Path, min_confidence: float) -> None:
+        if not 0.0 <= min_confidence <= 1.0:
+            raise ValueError("ASL_MIN_CONFIDENCE must be between 0 and 1.")
         self.model_path = model_path
         self.labels_path = labels_path
         self.min_confidence = min_confidence
@@ -122,12 +130,27 @@ class ModelService:
             LOGGER.warning("Labels file not found: %s", self.labels_path)
             return
 
-        self.model = tf.keras.models.load_model(self.model_path)
+        model = tf.keras.models.load_model(self.model_path)
         labels_raw = json.loads(self.labels_path.read_text(encoding="utf-8"))
         if not isinstance(labels_raw, list) or not labels_raw:
             raise ValueError("labels.json must contain a non-empty list.")
-        self.labels = [str(item) for item in labels_raw]
-        self.extractor = HandLandmarkExtractor(max_num_hands=1, min_detection_confidence=0.6, min_tracking_confidence=0.6)
+        labels = [str(item) for item in labels_raw]
+        if len(set(labels)) != len(labels):
+            raise ValueError("labels.json must not contain duplicate labels.")
+        if len(model.output_shape) != 2 or model.output_shape[-1] != len(labels):
+            raise ValueError(
+                f"Model output count ({model.output_shape[-1]}) does not match "
+                f"label count ({len(labels)})."
+            )
+        if len(model.input_shape) != 2 or model.input_shape[-1] != HandLandmarkExtractor.VECTOR_SIZE:
+            raise ValueError("Model input must accept 63 normalized hand-landmark features.")
+
+        extractor = HandLandmarkExtractor(
+            max_num_hands=1, min_detection_confidence=0.6, min_tracking_confidence=0.6
+        )
+        self.model = model
+        self.labels = labels
+        self.extractor = extractor
         LOGGER.info("Model loaded with %d labels.", len(self.labels))
 
     def unload(self) -> None:
@@ -153,7 +176,6 @@ class ModelService:
         confidence = float(probs[top_idx])
         top_letter = self.labels[top_idx]
         predicted_letter = top_letter if confidence >= self.min_confidence else None
-
         return PredictResponse(
             hand_detected=True,
             top_letter=top_letter,
@@ -163,15 +185,18 @@ class ModelService:
 
 
 def decode_base64_image(image_data: str) -> np.ndarray:
+    """Decode a bounded, validated base64 image into an OpenCV BGR frame."""
     try:
-        payload = image_data.split(",", 1)[1] if "," in image_data else image_data
-        raw_bytes = base64.b64decode(payload)
+        payload = image_data.split(",", 1)[1] if image_data.startswith("data:") and "," in image_data else image_data
+        raw_bytes = base64.b64decode(payload, validate=True)
+        if not raw_bytes:
+            raise ValueError("Image payload is empty.")
         np_buffer = np.frombuffer(raw_bytes, dtype=np.uint8)
         frame = cv2.imdecode(np_buffer, cv2.IMREAD_COLOR)
-        if frame is None:
-            raise ValueError("Decoded image is empty.")
+        if frame is None or frame.size == 0:
+            raise ValueError("Decoded image is invalid or empty.")
         return frame
-    except Exception as exc:  # pylint: disable=broad-except
+    except (ValueError, binascii.Error) as exc:
         raise ValueError(f"Invalid base64 image payload: {exc}") from exc
 
 
@@ -180,23 +205,28 @@ logging.basicConfig(
     format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
 )
 
-model_path = ROOT_DIR / "models" / "asl_model.h5"
-labels_path = ROOT_DIR / "models" / "labels.json"
+model_path = Path(os.getenv("ASL_MODEL_PATH", str(ROOT_DIR / "models" / "asl_model.h5"))).expanduser()
+labels_path = Path(os.getenv("ASL_LABELS_PATH", str(ROOT_DIR / "models" / "labels.json"))).expanduser()
 frontend_path = ROOT_DIR / "frontend" / "index.html"
 min_confidence = float(os.getenv("ASL_MIN_CONFIDENCE", "0.60"))
+allowed_origins = [
+    origin.strip()
+    for origin in os.getenv("ASL_ALLOWED_ORIGINS", DEFAULT_ALLOWED_ORIGINS).split(",")
+    if origin.strip()
+]
 
 app = FastAPI(
     title="Real-Time ASL Recognition API",
     description="FastAPI backend for American Sign Language alphabet recognition.",
-    version="1.0.0",
+    version="1.1.0",
 )
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=allowed_origins,
+    allow_credentials=False,
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type"],
 )
 
 model_service = ModelService(model_path=model_path, labels_path=labels_path, min_confidence=min_confidence)
@@ -241,9 +271,8 @@ def predict(request: PredictRequest) -> PredictResponse:
     if not model_service.ready:
         raise HTTPException(
             status_code=503,
-            detail="Model not loaded. Train the model first using training/train_model.py.",
+            detail="Model not loaded. Train the model first or configure ASL_MODEL_PATH and ASL_LABELS_PATH.",
         )
-
     try:
         frame = decode_base64_image(request.image)
         return model_service.predict(frame)
