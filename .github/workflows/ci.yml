@@ -7,11 +7,12 @@ on:
     branches: [main]
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -23,56 +24,8 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          python -m pip install -r requirements.txt
       - name: Compile Python files
         run: python -m compileall -q backend data_collection inference training utils tests
       - name: Run unit tests
         run: python -m unittest discover -s tests -v
-
-  convert-browser-model:
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.10"
-      - name: Install TensorFlow.js converter
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install tensorflowjs==4.17.0
-      - name: Verify source model and labels
-        run: |
-          test -s models/asl_model.h5
-          test -s models/labels.json
-          python - <<'PY'
-          import json
-          labels = json.load(open("models/labels.json", encoding="utf-8"))
-          assert labels == list("ABCDEFGHIJKLMNOPQRSTUVWXYZ"), "Expected labels A-Z in model output order"
-          print("Found A-Z labels in expected order.")
-          PY
-      - name: Convert Keras H5 model to TensorFlow.js
-        run: |
-          rm -rf frontend/models/asl_tfjs
-          mkdir -p frontend/models/asl_tfjs
-          tensorflowjs_converter \
-            --input_format=keras \
-            --output_format=tfjs_layers_model \
-            models/asl_model.h5 \
-            frontend/models/asl_tfjs
-          test -s frontend/models/asl_tfjs/model.json
-          ls -lh frontend/models/asl_tfjs
-      - name: Commit converted model files
-        if: github.event_name == 'push' && github.ref == 'refs/heads/fix-release-readiness'
-        run: |
-          git add frontend/models/asl_tfjs
-          if git diff --cached --quiet; then
-            echo "Converted model files are already up to date."
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -m "Build TensorFlow.js model for frontend inference"
-          git push origin "HEAD:${GITHUB_REF_NAME}"
