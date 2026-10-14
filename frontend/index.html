@@ -50,6 +50,33 @@
       import * as tf from "https://esm.sh/@tensorflow/tfjs@4.22.0";
       import { FilesetResolver, HandLandmarker } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22-rc.20250304/vision_bundle.mjs";
 
+      // Register the Keras feature-normalization layer before loading the converted model.
+      // TensorFlow.js Layers does not deserialize this Keras layer in every converter/runtime version.
+      function registerFeatureNormalizer(className) {
+        class FeatureNormalizer extends tf.layers.Layer {
+          static get className() { return className; }
+          build(inputShape) {
+            const featureCount = inputShape[inputShape.length - 1];
+            this.meanWeight = this.addWeight("mean", [featureCount], "float32", tf.initializers.zeros());
+            this.varianceWeight = this.addWeight("variance", [featureCount], "float32", tf.initializers.ones());
+            // Older Keras exports include a scalar count weight; it is stored but not needed at inference.
+            this.countWeight = this.addWeight("count", [], "int32", tf.initializers.zeros());
+            this.built = true;
+          }
+          call(inputs) {
+            return tf.div(
+              tf.sub(inputs, this.meanWeight.read()),
+              tf.sqrt(this.varianceWeight.read())
+            );
+          }
+          computeOutputShape(inputShape) { return inputShape; }
+          getConfig() { return { ...super.getConfig() }; }
+        }
+        tf.serialization.registerClass(FeatureNormalizer);
+      }
+      registerFeatureNormalizer("Normalization");
+      registerFeatureNormalizer("Normalize");
+
       const MODEL_URL = "./models/asl_tfjs/model.json";
       const WASM_URL = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22-rc.20250304/wasm";
       const HAND_MODEL_URL = "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task";
