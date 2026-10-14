@@ -636,14 +636,21 @@
             throw new Error("Model shape must be 63 input features and 26 A–Z outputs.");
           }
           const vision = await FilesetResolver.forVisionTasks(WASM_URL);
-          handLandmarker = await HandLandmarker.createFromOptions(vision, {
+          const handLandmarkerOptions = {
             baseOptions: { modelAssetPath: HAND_MODEL_URL, delegate: "GPU" },
             runningMode: "VIDEO",
             numHands: 1,
             minHandDetectionConfidence: 0.6,
             minHandPresenceConfidence: 0.6,
             minTrackingConfidence: 0.6
-          });
+          };
+          try {
+            handLandmarker = await HandLandmarker.createFromOptions(vision, handLandmarkerOptions);
+          } catch (gpuError) {
+            console.warn("GPU hand tracking unavailable; falling back to CPU.", gpuError);
+            handLandmarkerOptions.baseOptions.delegate = "CPU";
+            handLandmarker = await HandLandmarker.createFromOptions(vision, handLandmarkerOptions);
+          }
           setModelStatus(true, "Local AI Ready");
           setTranslation("Ready. Enable your camera and hold an ASL alphabet sign in frame.");
         } catch (error) {
