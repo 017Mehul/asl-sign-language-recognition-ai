@@ -1,12 +1,8 @@
 name: Convert ASL model for browser
-# Re-run conversion on push so the browser model is generated before frontend deployment.
 
 on:
   push:
     branches: [main, fix-release-readiness]
-    paths:
-      - "models/asl_model.h5"
-      - ".github/workflows/convert-browser-model.yml"
   workflow_dispatch:
 
 permissions:
