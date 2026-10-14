@@ -741,12 +741,31 @@
         }
       }
 
+      function stopCamera() {
+        if (predictionLoop) {
+          clearInterval(predictionLoop);
+          predictionLoop = null;
+        }
+        if (mediaStream) {
+          mediaStream.getTracks().forEach((track) => track.stop());
+          mediaStream = null;
+        }
+        cameraFeed.pause();
+        cameraFeed.srcObject = null;
+        cameraFeed.classList.remove("active");
+        cameraOverlay.classList.remove("hidden");
+        cameraState.textContent = "Camera stopped";
+        currentPrediction = null;
+        refreshAddButton();
+      }
+
       function shouldIgnoreShortcut(event) {
         const tag = event.target && event.target.tagName ? event.target.tagName.toLowerCase() : "";
         return tag === "input" || tag === "textarea" || event.ctrlKey || event.metaKey || event.altKey;
       }
 
       enableCameraBtn.addEventListener("click", startCamera);
+      window.addEventListener("pagehide", stopCamera);
       startSessionBtn.addEventListener("click", startCamera);
       addBtn.addEventListener("click", addLetter);
       spaceBtn.addEventListener("click", addSpace);
