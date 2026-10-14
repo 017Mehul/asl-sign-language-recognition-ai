@@ -25,6 +25,10 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install tensorflowjs==4.17.0
+          # tensorflow-decision-forests bundles generated protobuf code requiring
+          # a newer protobuf runtime than the one otherwise selected by pip.
+          python -m pip install "protobuf==6.31.1"
+          python -m pip check || true
       - name: Verify source model and labels
         run: |
           test -s models/asl_model.h5
