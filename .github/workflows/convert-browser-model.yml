@@ -1,4 +1,5 @@
 name: Convert ASL model for browser
+# Re-run conversion on push so the browser model is generated before frontend deployment.
 
 on:
   push:
