@@ -64,8 +64,11 @@
             this.built = true;
           }
           call(inputs) {
+            // tf.layers.Layer passes inbound tensors as an array to custom layers.
+            // Use the single feature tensor so the batch dimension [1, 63] is preserved.
+            const input = Array.isArray(inputs) ? inputs[0] : inputs;
             return tf.div(
-              tf.sub(inputs, this.meanWeight.read()),
+              tf.sub(input, this.meanWeight.read()),
               tf.sqrt(this.varianceWeight.read())
             );
           }
