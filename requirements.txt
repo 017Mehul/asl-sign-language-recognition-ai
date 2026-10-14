@@ -8,6 +8,7 @@ tensorflow==2.10.0
 scikit-learn==1.3.2
 pandas==2.0.3
 fastapi==0.104.1
+pydantic==1.10.15
 uvicorn[standard]==0.24.0
 pyttsx3==2.90
 kagglehub>=0.3.0,<1.0
