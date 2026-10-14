@@ -518,7 +518,7 @@
                 </div>
               </div>
 
-              <div id="sentenceText" class="sentence" aria-live="polite">Connect backend to start.</div>
+              <div id="sentenceText" class="sentence" aria-live="polite">Loading local model…</div>
 
               <button id="addBtn" class="btn-main" type="button" disabled>Add Letter (A)</button>
               <div class="btn-grid">
@@ -539,17 +539,19 @@
       </main>
     </div>
 
-    <script>
-      const API_BASE =
-        location.protocol === "http:" || location.protocol === "https:"
-          ? `${location.protocol}//${location.host}`
-          : "http://127.0.0.1:8000";
+    <script type="module">
+      import * as tf from "https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.esm.min.js";
+      import { FilesetResolver, HandLandmarker } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22";
 
-      const rawSessionId =
-        localStorage.getItem("aslSessionId") ||
-        (window.crypto?.randomUUID ? window.crypto.randomUUID() : `session-${Date.now()}`);
+      const MODEL_URL = "./models/asl_tfjs/model.json";
+      const WASM_URL = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/wasm";
+      const HAND_MODEL_URL = "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task";
+      const CONFIDENCE_THRESHOLD = 0.60;
+      const SMOOTHING_WINDOW = 6;
+      const rawSessionId = localStorage.getItem("aslSessionId") ||
+        (window.crypto?.randomUUID ? window.crypto.randomUUID() : "session-" + Date.now());
       localStorage.setItem("aslSessionId", rawSessionId);
-      const sessionId = `KS-${rawSessionId.replace(/[^a-zA-Z0-9]/g, "").slice(0, 6).toUpperCase() || "000000"}`;
+      const sessionId = "KS-" + (rawSessionId.replace(/[^a-zA-Z0-9]/g, "").slice(0, 6).toUpperCase() || "000000");
 
       const backendDot = document.getElementById("backendDot");
       const backendText = document.getElementById("backendText");
@@ -560,7 +562,6 @@
       const cameraState = document.getElementById("cameraState");
       const cameraFeed = document.getElementById("cameraFeed");
       const cameraOverlay = document.getElementById("cameraOverlay");
-      const captureCanvas = document.getElementById("captureCanvas");
       const enableCameraBtn = document.getElementById("enableCameraBtn");
       const startSessionBtn = document.getElementById("startSessionBtn");
       const addBtn = document.getElementById("addBtn");
@@ -569,176 +570,213 @@
       const clearBtn = document.getElementById("clearBtn");
       const speakBtn = document.getElementById("speakBtn");
 
-      sessionLabel.textContent = sessionId;
-
       let mediaStream = null;
       let predictionLoop = null;
-      let requestInFlight = false;
+      let predictionInFlight = false;
       let currentPrediction = null;
+      let model = null;
+      let handLandmarker = null;
+      let lastVideoTime = -1;
+      let recentPredictions = [];
+      let sentence = localStorage.getItem("aslSentence") || "";
 
-      function setBackendOnline(isOnline) {
-        backendDot.classList.toggle("online", isOnline);
-        backendText.textContent = isOnline ? "Backend Online" : "Backend Offline";
-        backendRow.style.color = isOnline ? "#85f1d7" : "#e9b8c1";
+      sessionLabel.textContent = sessionId;
+      updateSentence(sentence);
+
+      function setModelStatus(isReady, message) {
+        backendDot.classList.toggle("online", isReady);
+        backendText.textContent = message;
+        backendRow.style.color = isReady ? "#85f1d7" : "#e9b8c1";
       }
 
-      function updateSentence(text) {
-        sentenceText.textContent = text && text.trim() ? text : "No sentence yet.";
+      function setTranslation(message) {
+        translationText.textContent = message;
       }
 
-      function setTranslation(text) {
-        translationText.textContent = text;
+      function updateSentence(value) {
+        sentence = value;
+        sentenceText.textContent = sentence.trim() ? sentence : "No sentence yet.";
+        localStorage.setItem("aslSentence", sentence);
       }
 
       function refreshAddButton() {
         addBtn.disabled = !currentPrediction;
-        addBtn.textContent = currentPrediction ? `Add Letter (${currentPrediction})` : "Add Letter (A)";
+        addBtn.textContent = currentPrediction ? "Add Letter (" + currentPrediction + ")" : "Add Letter (—)";
       }
 
-      async function checkHealth() {
-        try {
-          const response = await fetch(`${API_BASE}/health`);
-          if (!response.ok) throw new Error("health failed");
-          const payload = await response.json();
-          setBackendOnline(payload.status === "ok");
-        } catch (error) {
-          setBackendOnline(false);
+      function normalizeLandmarks(landmarks) {
+        if (!landmarks || landmarks.length !== 21) return null;
+        const wrist = landmarks[0];
+        const centered = landmarks.map((point) => [
+          point.x - wrist.x,
+          point.y - wrist.y,
+          point.z - wrist.z
+        ]);
+        let scale = 0;
+        for (const point of centered) {
+          scale = Math.max(scale, Math.hypot(point[0], point[1]));
         }
-      }
-
-      async function syncSentence() {
-        try {
-          const response = await fetch(`${API_BASE}/sentence/${sessionId}`);
-          if (!response.ok) throw new Error("sync failed");
-          const payload = await response.json();
-          updateSentence(payload.sentence || "");
-        } catch (error) {
-          updateSentence("Unable to sync sentence.");
+        if (scale < 1e-6) {
+          for (const point of centered) {
+            scale = Math.max(scale, Math.hypot(point[0], point[1], point[2]));
+          }
         }
+        if (scale < 1e-6) return new Array(63).fill(0);
+        return centered.flatMap((point) => point.map((coordinate) => coordinate / scale));
       }
 
-      async function runAction(action, letter = null) {
-        const body = { session_id: sessionId, action };
-        if (letter) body.letter = letter;
-
-        const response = await fetch(`${API_BASE}/sentence/action`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        });
-        const payload = await response.json();
-        if (!response.ok) throw new Error(payload.detail || "action failed");
-        updateSentence(payload.sentence || "");
-        return payload;
+      async function initializeModels() {
+        setModelStatus(false, "Loading Local AI");
+        setTranslation("Loading the sign recognition model into your browser…");
+        try {
+          await tf.ready();
+          model = await tf.loadLayersModel(MODEL_URL);
+          if (model.inputs[0].shape[model.inputs[0].shape.length - 1] !== 63 ||
+              model.outputs[0].shape[model.outputs[0].shape.length - 1] !== 26) {
+            throw new Error("Model shape must be 63 input features and 26 A–Z outputs.");
+          }
+          const vision = await FilesetResolver.forVisionTasks(WASM_URL);
+          handLandmarker = await HandLandmarker.createFromOptions(vision, {
+            baseOptions: { modelAssetPath: HAND_MODEL_URL, delegate: "GPU" },
+            runningMode: "VIDEO",
+            numHands: 1,
+            minHandDetectionConfidence: 0.6,
+            minHandPresenceConfidence: 0.6,
+            minTrackingConfidence: 0.6
+          });
+          setModelStatus(true, "Local AI Ready");
+          setTranslation("Ready. Enable your camera and hold an ASL alphabet sign in frame.");
+        } catch (error) {
+          console.error("Local model initialization failed:", error);
+          setModelStatus(false, "Model Not Ready");
+          setTranslation("Could not load browser model. Ensure frontend/models/asl_tfjs/model.json exists and the site is served over HTTPS. " + error.message);
+          enableCameraBtn.disabled = true;
+          startSessionBtn.disabled = true;
+        }
       }
 
       async function startCamera() {
         if (mediaStream) return;
-
+        if (!model || !handLandmarker) {
+          setTranslation("The local model is still loading or failed to load.");
+          return;
+        }
         enableCameraBtn.disabled = true;
-        cameraState.textContent = "Requesting camera permission...";
-
+        cameraState.textContent = "Requesting camera permission…";
         try {
-          mediaStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+          mediaStream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } },
+            audio: false
+          });
           cameraFeed.srcObject = mediaStream;
           await cameraFeed.play();
-
           cameraFeed.classList.add("active");
           cameraOverlay.classList.add("hidden");
-          setTranslation("Camera active. Hold a sign for prediction.");
-
+          cameraState.textContent = "Camera active";
+          setTranslation("Camera active. Hold a single letter sign steady.");
           if (predictionLoop) clearInterval(predictionLoop);
-          predictionLoop = window.setInterval(predictFrame, 280);
+          predictionLoop = window.setInterval(predictFrame, 180);
         } catch (error) {
-          cameraState.textContent = `Camera error: ${error.message}`;
-          setTranslation("Camera unavailable. Check camera permissions.");
-        } finally {
+          cameraState.textContent = "Camera unavailable";
+          setTranslation("Camera error: " + error.message + ". Allow camera access and use HTTPS or localhost.");
+          if (mediaStream) mediaStream.getTracks().forEach((track) => track.stop());
+          mediaStream = null;
           enableCameraBtn.disabled = false;
         }
       }
 
       async function predictFrame() {
-        if (!mediaStream || requestInFlight) return;
-        requestInFlight = true;
-
+        if (!mediaStream || predictionInFlight || !model || !handLandmarker ||
+            cameraFeed.readyState < HTMLMediaElement.HAVE_CURRENT_DATA ||
+            cameraFeed.currentTime === lastVideoTime) return;
+        predictionInFlight = true;
+        lastVideoTime = cameraFeed.currentTime;
         try {
-          const ctx = captureCanvas.getContext("2d");
-          ctx.drawImage(cameraFeed, 0, 0, captureCanvas.width, captureCanvas.height);
-          const image = captureCanvas.toDataURL("image/jpeg", 0.8);
-
-          const response = await fetch(`${API_BASE}/predict`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ image }),
-          });
-          const payload = await response.json();
-          if (!response.ok) throw new Error(payload.detail || "prediction failed");
-
-          currentPrediction = payload.predicted_letter || null;
-          if (payload.hand_detected) {
-            const shown = currentPrediction || payload.top_letter || "--";
-            setTranslation(`Detected ${shown} at ${(Number(payload.confidence || 0) * 100).toFixed(1)}% confidence`);
-          } else {
+          const result = handLandmarker.detectForVideo(cameraFeed, performance.now());
+          const landmarks = result.landmarks && result.landmarks[0];
+          if (!landmarks) {
+            recentPredictions = [];
             currentPrediction = null;
             setTranslation("No hand detected. Keep your hand in frame.");
+            refreshAddButton();
+            return;
+          }
+          const features = normalizeLandmarks(landmarks);
+          if (!features || features.length !== 63) throw new Error("Hand landmark extraction failed.");
+          const input = tf.tensor2d([features], [1, 63], "float32");
+          let probabilities;
+          try {
+            probabilities = await model.predict(input).data();
+          } finally {
+            input.dispose();
+          }
+          let topIndex = 0;
+          for (let i = 1; i < probabilities.length; i++) {
+            if (probabilities[i] > probabilities[topIndex]) topIndex = i;
+          }
+          const confidence = Number(probabilities[topIndex]);
+          const label = String.fromCharCode(65 + topIndex);
+          if (confidence < CONFIDENCE_THRESHOLD) {
+            recentPredictions = [];
+            currentPrediction = null;
+            setTranslation("Hand detected, but confidence is low (" + (confidence * 100).toFixed(1) + "%). Adjust your hand.");
+          } else {
+            recentPredictions.push(label);
+            if (recentPredictions.length > SMOOTHING_WINDOW) recentPredictions.shift();
+            const counts = {};
+            for (const item of recentPredictions) counts[item] = (counts[item] || 0) + 1;
+            const best = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
+            const minimumVotes = Math.max(2, Math.floor(recentPredictions.length / 2) + 1);
+            currentPrediction = best && best[1] >= minimumVotes ? best[0] : null;
+            setTranslation("Top prediction: " + label + " (" + (confidence * 100).toFixed(1) +
+              "%)" + (currentPrediction ? " · stable: " + currentPrediction : " · stabilizing…"));
           }
           refreshAddButton();
         } catch (error) {
-          currentPrediction = null;
-          refreshAddButton();
-          setTranslation(`Prediction error: ${error.message}`);
+          console.error("Prediction failed:", error);
+          setTranslation("Prediction error: " + error.message);
         } finally {
-          requestInFlight = false;
+          predictionInFlight = false;
         }
       }
 
-      async function addLetter() {
+      function addLetter() {
         if (!currentPrediction) {
-          setTranslation("No stable prediction to append.");
+          setTranslation("Hold a sign steady until a stable prediction appears.");
           return;
         }
-        try {
-          await runAction("append", currentPrediction);
-          setTranslation(`Added letter ${currentPrediction}.`);
-        } catch (error) {
-          setTranslation(error.message);
-        }
+        updateSentence(sentence + currentPrediction);
+        setTranslation("Added letter " + currentPrediction + ".");
       }
 
-      async function addSpace() {
-        try {
-          await runAction("space");
-          setTranslation("Added space.");
-        } catch (error) {
-          setTranslation(error.message);
-        }
+      function addSpace() {
+        updateSentence(sentence + " ");
+        setTranslation("Added a space.");
       }
 
-      async function backspace() {
-        try {
-          await runAction("backspace");
-          setTranslation("Deleted last character.");
-        } catch (error) {
-          setTranslation(error.message);
-        }
+      function backspace() {
+        updateSentence(sentence.slice(0, -1));
+        setTranslation("Deleted the last character.");
       }
 
-      async function clearSentence() {
-        try {
-          await runAction("clear");
-          setTranslation("Sentence cleared.");
-        } catch (error) {
-          setTranslation(error.message);
-        }
+      function clearSentence() {
+        updateSentence("");
+        setTranslation("Sentence cleared.");
       }
 
-      async function speakSentence() {
-        try {
-          const payload = await runAction("speak");
-          setTranslation(payload.spoken ? "Speaking sentence..." : "TTS unavailable or sentence empty.");
-        } catch (error) {
-          setTranslation(error.message);
+      function speakSentence() {
+        const text = sentence.trim();
+        if (!text) {
+          setTranslation("Add a few letters before using text-to-speech.");
+          return;
         }
+        if (!("speechSynthesis" in window)) {
+          setTranslation("Text-to-speech is not supported in this browser.");
+          return;
+        }
+        window.speechSynthesis.cancel();
+        window.speechSynthesis.speak(new SpeechSynthesisUtterance(text));
+        setTranslation("Speaking sentence on this device.");
       }
 
       function stopCamera() {
@@ -746,16 +784,15 @@
           clearInterval(predictionLoop);
           predictionLoop = null;
         }
-        if (mediaStream) {
-          mediaStream.getTracks().forEach((track) => track.stop());
-          mediaStream = null;
-        }
+        if (mediaStream) mediaStream.getTracks().forEach((track) => track.stop());
+        mediaStream = null;
         cameraFeed.pause();
         cameraFeed.srcObject = null;
         cameraFeed.classList.remove("active");
         cameraOverlay.classList.remove("hidden");
         cameraState.textContent = "Camera stopped";
         currentPrediction = null;
+        recentPredictions = [];
         refreshAddButton();
       }
 
@@ -765,37 +802,28 @@
       }
 
       enableCameraBtn.addEventListener("click", startCamera);
-      window.addEventListener("pagehide", stopCamera);
       startSessionBtn.addEventListener("click", startCamera);
       addBtn.addEventListener("click", addLetter);
       spaceBtn.addEventListener("click", addSpace);
       backspaceBtn.addEventListener("click", backspace);
       clearBtn.addEventListener("click", clearSentence);
       speakBtn.addEventListener("click", speakSentence);
-
+      window.addEventListener("pagehide", stopCamera);
+      document.addEventListener("visibilitychange", () => {
+        if (document.hidden) stopCamera();
+      });
       document.addEventListener("keydown", (event) => {
         if (shouldIgnoreShortcut(event)) return;
-
         const key = event.key.toLowerCase();
-        if (key === "a") {
-          event.preventDefault();
-          addLetter();
-        } else if (event.key === " ") {
-          event.preventDefault();
-          addSpace();
-        } else if (key === "b") {
-          event.preventDefault();
-          backspace();
-        } else if (key === "t") {
-          event.preventDefault();
-          speakSentence();
-        }
+        if (key === "a") { event.preventDefault(); addLetter(); }
+        else if (event.key === " ") { event.preventDefault(); addSpace(); }
+        else if (key === "b") { event.preventDefault(); backspace(); }
+        else if (key === "c") { event.preventDefault(); clearSentence(); }
+        else if (key === "t") { event.preventDefault(); speakSentence(); }
       });
 
       refreshAddButton();
-      checkHealth();
-      syncSentence();
-      setInterval(checkHealth, 8000);
+      initializeModels();
     </script>
   </body>
 </html>
