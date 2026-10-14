@@ -164,8 +164,9 @@
           console.error("Local model initialization failed:", error);
           setModelStatus(false, "Model Not Ready");
           setTranslation("Could not load browser model. Ensure frontend/models/asl_tfjs/model.json exists and the site is served over HTTPS. " + error.message);
-          enableCameraBtn.disabled = true;
-          startSessionBtn.disabled = true;
+          enableCameraBtn.disabled = false;
+          enableCameraBtn.textContent = "Retry Camera Setup →";
+          startSessionBtn.disabled = false;
         }
       }
 
@@ -317,6 +318,7 @@
         return tag === "input" || tag === "textarea" || event.ctrlKey || event.metaKey || event.altKey;
       }
 
+      window.aslAppInitialized = true;
       enableCameraBtn.addEventListener("click", startCamera);
       startSessionBtn.addEventListener("click", startCamera);
       addBtn.addEventListener("click", addLetter);
@@ -342,6 +344,27 @@
       initializeModels();
     </script>
 <script>
+window.aslAppInitialized = window.aslAppInitialized || false;
+const cameraButtonFallback = () => {
+  if (window.aslAppInitialized) return;
+  const state = document.getElementById('cameraState');
+  const overlay = document.getElementById('cameraOverlay');
+  const btn = document.getElementById('enableCameraBtn');
+  if (state) state.textContent = 'Recognition engine did not start';
+  if (overlay) {
+    const p = overlay.querySelector('p');
+    if (p) p.textContent = 'The AI scripts or model did not load. Refresh the page; if this continues, check the browser Console and Network tabs for blocked CDN/model files.';
+  }
+  if (btn) { btn.disabled = false; btn.textContent = 'Retry after refresh →'; }
+};
+document.getElementById('enableCameraBtn')?.addEventListener('click', cameraButtonFallback);
+document.getElementById('startSessionBtn')?.addEventListener('click', cameraButtonFallback);
+window.addEventListener('error', (event) => {
+  if (!window.aslAppInitialized && event.message) cameraButtonFallback();
+});
+window.addEventListener('unhandledrejection', () => {
+  if (!window.aslAppInitialized) cameraButtonFallback();
+});
 const modelObserver=new MutationObserver(()=>{const t=document.getElementById('backendText')?.textContent||'';const badge=document.getElementById('modelBadge');if(badge){badge.textContent=t;badge.style.background=t.includes('Ready')?'#e4fbf2':'#f1eaff';badge.style.color=t.includes('Ready')?'#087f5b':'#6842ba';}});
 const statusNode=document.getElementById('backendText');if(statusNode)modelObserver.observe(statusNode,{childList:true,characterData:true,subtree:true});
 const translateNode=document.getElementById('translationText');
